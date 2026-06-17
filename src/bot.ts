@@ -9,8 +9,25 @@ import type { BotError } from "grammy";
 // The per-chat session shape (ephemeral conversation state only). Extend as the
 // bot grows. Durable domain data must NOT live here — use the toolkit's
 // persistent storage (see AGENTS.md).
+export interface AddHabitDraft {
+  name?: string;
+  // Populated by later add-habit tasks (E2T2+).
+  frequency?: "daily" | "weekly";
+  timesPerDay?: number;
+  weeklyDays?: number[];
+}
+
 export interface Session {
-  // example: step?: "awaiting_amount";
+  /** Current wizard step, if any. "idle" when not in a flow. */
+  step?:
+    | "idle"
+    | "awaiting_habit_name"
+    | "awaiting_frequency"
+    | "awaiting_times"
+    | "awaiting_days"
+    | "awaiting_confirmation";
+  /** Draft habit being assembled by the /add wizard. */
+  addHabit?: AddHabitDraft;
 }
 
 const WELCOME_TEXT =
@@ -31,6 +48,14 @@ const HELP_TEXT =
 const UNKNOWN_COMMAND_TEXT =
   "I don't recognize that command.\n\n" +
   "Send /help to see what I can do, or tap a button below.";
+
+const ADD_HABIT_PROMPT =
+  "Let's add a new habit! 📝\n\n" +
+  "What habit would you like to track?\n\n" +
+  "Send the name (1–60 characters), or /cancel to abort.";
+
+const HABIT_NAME_MIN = 1;
+const HABIT_NAME_MAX = 60;
 
 type MenuCallback =
   | "menu:add"
@@ -57,6 +82,10 @@ const MENU_DESCRIPTIONS: Record<Exclude<MenuCallback, "menu:back">, string> = {
     "To see every command Streakly supports, send /help.",
 };
 
+function isInWizard(step: Session["step"]): boolean {
+  return step != null && step !== "idle";
+}
+
 /**
  * buildBot — assembles the bot and registers every handler, but does NOT start
  * it. Shared by the runtime entry (src/index.ts) and the Tests-gate harness
@@ -65,11 +94,7 @@ const MENU_DESCRIPTIONS: Record<Exclude<MenuCallback, "menu:back">, string> = {
  */
 export function buildBot(token: string) {
   const bot = createBot<Session>(token, {
-    initial: () => ({}),
-    // Global error boundary. grammY's bot.catch fires here on any unhandled
-    // throw from a handler; we log it and try to reply gracefully so the
-    // user sees something instead of silence, and the polling loop keeps
-    // running. ctx may be absent on startup errors, hence the guard.
+    initial: () => ({ step: "idle" }),
     onError: (err) => {
       const e = err as BotError<BotContext<Session>>;
       console.error("[streakly] unhandled error:", err);
@@ -95,24 +120,75 @@ export function buildBot(token: string) {
     await ctx.reply(HELP_TEXT);
   });
 
-  // Unknown-command fallback. Fires for any text message that wasn't claimed
-  // by a /command handler (so /start and /help never reach here). Plain text
-  // (no leading "/") is intentionally left silent — the user can use the menu
-  // or /help. Messages that look like a command (start with "/") get a
-  // friendly nudge with the main menu so they're never stuck.
+  // /add — start the new-habit wizard. Step 1 of N: ask for the habit name.
+  // E2T1 owns this entry + the name capture. E2T2+ will deepen the wizard
+  // (frequency → times/days → confirm) by handling the next session steps
+  // and the "Got it" message E2T1 sends here.
+  bot.command("add", async (ctx) => {
+    ctx.session.step = "awaiting_habit_name";
+    ctx.session.addHabit = {};
+    await ctx.reply(ADD_HABIT_PROMPT);
+  });
+
+  // /cancel — exit any in-progress wizard, clear the draft.
+  bot.command("cancel", async (ctx) => {
+    const wasInWizard = isInWizard(ctx.session.step);
+    ctx.session.step = "idle";
+    ctx.session.addHabit = undefined;
+    if (wasInWizard) {
+      await ctx.reply("Cancelled. Your draft habit was discarded.");
+    } else {
+      await ctx.reply("Nothing to cancel. Send /start for the main menu.");
+    }
+  });
+
+  // Unified message:text handler. Order:
+  //   1. Wizard steps (awaiting text) — consume.
+  //   2. Unknown /command — reply with the friendly fallback.
+  //   3. Plain text (no wizard, no /command) — silent.
+  // The handler always consumes (no next()) so a single text message is
+  // processed by exactly one branch.
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text;
+
+    // --- 1. Wizard: awaiting habit name (E2T1) ---
+    if (ctx.session.step === "awaiting_habit_name") {
+      const name = text.trim();
+      if (name.length < HABIT_NAME_MIN || name.length > HABIT_NAME_MAX) {
+        await ctx.reply(
+          `Name must be ${HABIT_NAME_MIN}–${HABIT_NAME_MAX} characters. Try again, or /cancel.`,
+        );
+        return;
+      }
+      ctx.session.addHabit = { name };
+      // Hand off to E2T2 (frequency selection). E2T1 sets step back to idle
+      // so the generic text handler stays silent until E2T2 wires its own
+      // step ("awaiting_frequency") and the frequency buttons.
+      ctx.session.step = "idle";
+      await ctx.reply(
+        `Got it: "${name}".\n\nHow often? (Daily or Weekly)`,
+      );
+      return;
+    }
+
+    // --- 2. Future wizard steps (awaiting_frequency / times / days / confirm)
+    //    will be handled here by E2T2+. ---
+
+    // --- 3. Unknown /command fallback ---
     if (text.startsWith("/")) {
       await ctx.reply(UNKNOWN_COMMAND_TEXT, {
         reply_markup: menuKeyboard(MENU_ITEMS, 2),
       });
+      return;
     }
+
+    // --- 4. Plain text, not in a wizard — stay silent. ---
   });
 
   // Main-menu routing. Every tap edits the /start message in place and tells
   // the user which command to use. Future feature tasks (E1T1 first-run
-  // /start, E2T1 /add, E5T1 /check, E6T1 /stats) deepen the per-command
-  // handlers — the menu structure stays.
+  // /start, E2T2 /add frequency, E5T1 /check, E6T1 /stats) deepen the
+  // per-command handlers — the menu structure stays.
   bot.on("callback_query:data", async (ctx) => {
     const data = ctx.callbackQuery.data;
 

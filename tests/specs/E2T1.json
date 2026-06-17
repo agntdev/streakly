@@ -1,0 +1,106 @@
+[
+  {
+    "name": "E2T1: /add prompts for a habit name",
+    "steps": [
+      {
+        "send": { "text": "/add" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Let's add a new habit! 📝\n\nWhat habit would you like to track?\n\nSend the name (1–60 characters), or /cancel to abort."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T1: /add then a valid name stores it and hands off to frequency step",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "Read 30m" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Got it: \"Read 30m\".\n\nHow often? (Daily or Weekly)"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T1: whitespace-only name is rejected, wizard stays open",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "   " },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Name must be 1–60 characters. Try again, or /cancel."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T1: 61-character name is rejected",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Name must be 1–60 characters. Try again, or /cancel."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T1: /cancel during the wizard discards the draft",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "/cancel" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Cancelled. Your draft habit was discarded." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T1: /cancel outside a wizard is a friendly no-op",
+    "steps": [
+      {
+        "send": { "text": "/cancel" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Nothing to cancel. Send /start for the main menu." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T1: after a valid name, the wizard is idle and plain text is silent again",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "hello there" }, "expect": [] }
+    ]
+  }
+]
