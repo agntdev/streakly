@@ -1,0 +1,138 @@
+[
+  {
+    "name": "T02: /start sends welcome with main menu keyboard",
+    "steps": [
+      {
+        "send": { "text": "/start" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Welcome to Streakly! 🎯\n\nBuild habits, track daily streaks, and watch your progress grow.\n\nChoose an action:",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "📝 Add Habit", "callback_data": "menu:add" },
+                    { "text": "✅ Check Today", "callback_data": "menu:check" }
+                  ],
+                  [
+                    { "text": "📊 Stats", "callback_data": "menu:stats" },
+                    { "text": "❓ Help", "callback_data": "menu:help" }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T02: tapping 'Add Habit' edits the menu message with /add guidance",
+    "steps": [
+      { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "menu:add", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "To add a new habit, send /add and I'll walk you through name, frequency, and target.",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [{ "text": "« Back to menu", "callback_data": "menu:back" }]
+                ]
+              }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T02: tapping 'Check Today' edits with /check guidance",
+    "steps": [
+      { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "menu:check", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "To log your habits for today, send /check and pick the ones you completed."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T02: tapping 'Stats' edits with /stats guidance",
+    "steps": [
+      { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "menu:stats", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "To see your streak lengths and completion stats, send /stats."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T02: tapping 'Help' edits with /help guidance",
+    "steps": [
+      { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "menu:help", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "To see every command Streakly supports, send /help."
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T02: 'Back to menu' restores the main menu on the same message",
+    "steps": [
+      { "send": { "text": "/start" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "menu:add", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "menu:back", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Welcome to Streakly! 🎯\n\nBuild habits, track daily streaks, and watch your progress grow.\n\nChoose an action:",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "📝 Add Habit", "callback_data": "menu:add" },
+                    { "text": "✅ Check Today", "callback_data": "menu:check" }
+                  ],
+                  [
+                    { "text": "📊 Stats", "callback_data": "menu:stats" },
+                    { "text": "❓ Help", "callback_data": "menu:help" }
+                  ]
+                ]
+              }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  }
+]
