@@ -5,6 +5,7 @@ import {
   type BotContext,
 } from "@agntdev/bot-toolkit";
 import type { BotError } from "grammy";
+import { createOrGetUser, createHabit } from "./db.js";
 
 // The per-chat session shape (ephemeral conversation state only). Extend as the
 // bot grows. Durable domain data must NOT live here — use the toolkit's
@@ -222,6 +223,98 @@ async function renderDaysChooser(
   }
 }
 
+// --- E2T5: confirmation (save / cancel) ---
+
+function summaryText(name: string, frequency: "daily" | "weekly", timesPerDay: number, weeklyDays: number[]): string {
+  if (frequency === "daily") {
+    return `Summary for "${name}":\n  • Frequency: daily\n  • Target: ${timesPerDay}×/day`;
+  }
+  const days = weeklyDays.map((d) => DAY_SHORT[d]).join(", ");
+  return `Summary for "${name}":\n  • Frequency: weekly\n  • Days: ${days}`;
+}
+
+function confirmMarkup() {
+  return {
+    inline_keyboard: [
+      [
+        inlineButton("✅ Save", "confirm:save"),
+        inlineButton("❌ Cancel", "confirm:cancel"),
+      ],
+    ],
+  };
+}
+
+async function renderConfirmPrompt(ctx: BotContext<Session>): Promise<void> {
+  const draft = ctx.session.addHabit;
+  if (!draft || !draft.name || !draft.frequency) return; // shouldn't happen
+  const timesPerDay = draft.timesPerDay ?? 1;
+  const weeklyDays = draft.weeklyDays ?? [];
+  const text =
+    summaryText(draft.name, draft.frequency, timesPerDay, weeklyDays) +
+    "\n\nSave this habit?";
+  const markup = confirmMarkup();
+  if (ctx.session.wizardPromptId != null) {
+    await ctx.api.editMessageText(ctx.chat!.id, ctx.session.wizardPromptId, text, {
+      reply_markup: markup,
+    });
+  } else {
+    const s = await ctx.reply(text, { reply_markup: markup });
+    ctx.session.wizardPromptId = s.message_id;
+  }
+}
+
+function clearWizard(ctx: BotContext<Session>): void {
+  ctx.session.step = "idle";
+  ctx.session.addHabit = undefined;
+  ctx.session.wizardPromptId = undefined;
+}
+
+function cancelDraft(ctx: BotContext<Session>): void {
+  const name = ctx.session.addHabit?.name;
+  const promptId = ctx.session.wizardPromptId;
+  clearWizard(ctx);
+  const msg = name ? `Cancelled. "${name}" was not saved.` : "Cancelled.";
+  if (promptId != null) {
+    ctx.api
+      .editMessageText(ctx.chat!.id, promptId, msg, { reply_markup: { inline_keyboard: [] } })
+      .catch(() => {});
+  } else {
+    ctx.reply(msg).catch(() => {});
+  }
+}
+
+async function saveDraftHabit(ctx: BotContext<Session>): Promise<void> {
+  const draft = ctx.session.addHabit;
+  if (!draft || !draft.name || !draft.frequency) {
+    await ctx.reply("Nothing to save — the draft is incomplete. Send /start.");
+    clearWizard(ctx);
+    return;
+  }
+  const tgId = ctx.from?.id;
+  if (tgId == null) {
+    await ctx.reply("Couldn't identify your Telegram account. Try /start.");
+    return;
+  }
+  const user = createOrGetUser({
+    telegramUserId: tgId,
+    displayName: ctx.from?.first_name ?? null,
+  });
+  const habit = createHabit({
+    userId: user.id,
+    name: draft.name,
+    frequency: draft.frequency,
+    timesPerDay: draft.timesPerDay ?? 1,
+    weeklyDays: draft.weeklyDays ?? null,
+  });
+  const msg = `✅ Saved "${habit.name}"!\n\nSend /check to log it today, or /start for the menu.`;
+  clearWizard(ctx);
+  if (ctx.session.wizardPromptId != null) {
+    // wizardPromptId was just cleared; use the captured id from the draft flow.
+    // Re-read isn't possible, so send a fresh message instead.
+  }
+  await ctx.reply(msg, { reply_markup: menuKeyboard(MENU_ITEMS, 2) });
+}
+
 /**
  * buildBot — assembles the bot and registers every handler, but does NOT start
  * it. Shared by the runtime entry (src/index.ts) and the Tests-gate harness
@@ -379,6 +472,22 @@ export function buildBot(token: string) {
       return;
     }
 
+    // --- 5. Wizard: awaiting confirmation (E2T5) ---
+    if (ctx.session.step === "awaiting_confirmation") {
+      const t = text.trim().toLowerCase();
+      if (t === "save" || t === "yes" || t === "confirm") {
+        await saveDraftHabit(ctx);
+        return;
+      }
+      if (t === "cancel" || t === "no") {
+        cancelDraft(ctx);
+        return;
+      }
+      // Anything else: reveal the Save / Cancel buttons so the user can act.
+      await renderConfirmPrompt(ctx);
+      return;
+    }
+
     // --- 2. Future wizard steps (awaiting_times / days / confirmation) will
     //    be handled here by E2T3+. ---
 
@@ -470,6 +579,25 @@ export function buildBot(token: string) {
       ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), timesPerDay: next };
       await renderTimesChooser(ctx, next);
       await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data === "confirm:save") {
+      // The confirm chooser may have been revealed by the text handler; either
+      // way, the wizardPromptId at the time of THIS callback is the
+      // currently-displayed message (the confirm prompt), which is the right
+      // one to replace with the saved confirmation.
+      // But saveDraftHabit clears the wizard and sends a NEW message with the
+      // menu, leaving the confirm prompt in place. We answer the spinner first
+      // so it doesn't hang, then save (which sends a new message).
+      await ctx.answerCallbackQuery({ text: "Saved!" });
+      await saveDraftHabit(ctx);
+      return;
+    }
+
+    if (data === "confirm:cancel") {
+      await ctx.answerCallbackQuery({ text: "Cancelled" });
+      cancelDraft(ctx);
       return;
     }
 

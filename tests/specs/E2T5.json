@@ -1,0 +1,114 @@
+[
+  {
+    "name": "E2T5: daily flow ends with a confirmation that reveals Save/Cancel buttons on first input",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "2" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "times:done", "messageId": 100 }, "expect": [{ "method": "editMessageText" }, { "method": "answerCallbackQuery" }] },
+      {
+        "send": { "text": "?" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Summary for \"Read\":\n  • Frequency: daily\n  • Target: 2×/day\n\nSave this habit?",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "✅ Save", "callback_data": "confirm:save" },
+                    { "text": "❌ Cancel", "callback_data": "confirm:cancel" }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T5: typing 'save' saves the daily habit and shows the post-save menu",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "1" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "times:done", "messageId": 100 }, "expect": [{ "method": "editMessageText" }, { "method": "answerCallbackQuery" }] },
+      {
+        "send": { "text": "save" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Saved \"Read\"!\n\nSend /check to log it today, or /start for the menu."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T5: weekly flow ends with confirmation; 'save' persists the habit",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:weekly", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "mon,wed,fri" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "days:done", "messageId": 100 }, "expect": [{ "method": "editMessageText" }, { "method": "answerCallbackQuery" }] },
+      {
+        "send": { "text": "save" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Saved \"Yoga\"!\n\nSend /check to log it today, or /start for the menu."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T5: tapping '❌ Cancel' discards the draft",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "1" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "times:done", "messageId": 100 }, "expect": [{ "method": "editMessageText" }, { "method": "answerCallbackQuery" }] },
+      { "send": { "text": "?" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "confirm:cancel", "messageId": 100 },
+        "expect": [
+          { "method": "answerCallbackQuery", "payload": { "text": "Cancelled" } },
+          { "method": "editMessageText", "payload": { "text": "Cancelled. \"Read\" was not saved." } }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T5: tapping '✅ Save' persists the habit (daily) and shows the post-save message",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "2" }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "callback": "times:done", "messageId": 100 }, "expect": [{ "method": "editMessageText" }, { "method": "answerCallbackQuery" }] },
+      { "send": { "text": "?" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "confirm:save", "messageId": 100 },
+        "expect": [
+          { "method": "answerCallbackQuery", "payload": { "text": "Saved!" } },
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "✅ Saved \"Read\"!\n\nSend /check to log it today, or /start for the menu."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
