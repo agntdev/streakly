@@ -28,6 +28,9 @@ export interface Session {
     | "awaiting_confirmation";
   /** Draft habit being assembled by the /add wizard. */
   addHabit?: AddHabitDraft;
+  /** Telegram message_id of the last wizard prompt, so text handlers can
+   *  edit the same message in place (callback handlers do it via ctx). */
+  wizardPromptId?: number;
 }
 
 const WELCOME_TEXT =
@@ -161,18 +164,65 @@ export function buildBot(token: string) {
         return;
       }
       ctx.session.addHabit = { name };
-      // Hand off to E2T2 (frequency selection). E2T1 sets step back to idle
-      // so the generic text handler stays silent until E2T2 wires its own
-      // step ("awaiting_frequency") and the frequency buttons.
-      ctx.session.step = "idle";
-      await ctx.reply(
+      // Hand off to E2T2 (frequency selection). E2T2 adds the Daily/Weekly
+      // inline buttons and the awaiting_frequency handler.
+      ctx.session.step = "awaiting_frequency";
+      const sent = await ctx.reply(
         `Got it: "${name}".\n\nHow often? (Daily or Weekly)`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                inlineButton("📅 Daily", "freq:daily"),
+                inlineButton("📆 Weekly", "freq:weekly"),
+              ],
+            ],
+          },
+        },
       );
+      ctx.session.wizardPromptId = sent.message_id;
       return;
     }
 
-    // --- 2. Future wizard steps (awaiting_frequency / times / days / confirm)
-    //    will be handled here by E2T2+. ---
+    // --- 2. Wizard: awaiting frequency (E2T2) ---
+    if (ctx.session.step === "awaiting_frequency") {
+      const choice = text.trim().toLowerCase();
+      if (choice === "daily" || choice === "weekly") {
+        const freq = choice as "daily" | "weekly";
+        const name = ctx.session.addHabit?.name ?? "";
+        ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), frequency: freq };
+        if (freq === "daily") {
+          ctx.session.step = "awaiting_times";
+          const nextText = `Daily it is — "${name}".\n\nHow many times per day? Send a number between 1 and 20, or /cancel.`;
+          if (ctx.session.wizardPromptId != null) {
+            await ctx.api.editMessageText(ctx.chat.id, ctx.session.wizardPromptId, nextText, {
+              reply_markup: { inline_keyboard: [] },
+            });
+          } else {
+            const s = await ctx.reply(nextText);
+            ctx.session.wizardPromptId = s.message_id;
+          }
+        } else {
+          ctx.session.step = "awaiting_days";
+          const nextText = `Weekly — "${name}".\n\nWhich days? You'll pick the days next. /cancel to abort.`;
+          if (ctx.session.wizardPromptId != null) {
+            await ctx.api.editMessageText(ctx.chat.id, ctx.session.wizardPromptId, nextText, {
+              reply_markup: { inline_keyboard: [] },
+            });
+          } else {
+            const s = await ctx.reply(nextText);
+            ctx.session.wizardPromptId = s.message_id;
+          }
+        }
+        return;
+      }
+      // Other text in the frequency step: fall through to the generic
+      // unknown-/command and plain-text-silent handling below. The user can
+      // tap a button or type "daily"/"weekly".
+    }
+
+    // --- 2. Future wizard steps (awaiting_times / days / confirmation) will
+    //    be handled here by E2T3+. ---
 
     // --- 3. Unknown /command fallback ---
     if (text.startsWith("/")) {
@@ -211,6 +261,27 @@ export function buildBot(token: string) {
       await ctx.editMessageText(guidance, {
         reply_markup: { inline_keyboard: [backRow] },
       });
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data === "freq:daily" || data === "freq:weekly") {
+      const freq = data === "freq:daily" ? "daily" : "weekly";
+      const name = ctx.session.addHabit?.name ?? "";
+      ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), frequency: freq };
+      if (freq === "daily") {
+        ctx.session.step = "awaiting_times";
+        await ctx.editMessageText(
+          `Daily it is — "${name}".\n\nHow many times per day? Send a number between 1 and 20, or /cancel.`,
+          { reply_markup: { inline_keyboard: [] } },
+        );
+      } else {
+        ctx.session.step = "awaiting_days";
+        await ctx.editMessageText(
+          `Weekly — "${name}".\n\nWhich days? You'll pick the days next. /cancel to abort.`,
+          { reply_markup: { inline_keyboard: [] } },
+        );
+      }
       await ctx.answerCallbackQuery();
       return;
     }

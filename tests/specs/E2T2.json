@@ -1,0 +1,103 @@
+[
+  {
+    "name": "E2T2: after a habit name, the prompt carries Daily/Weekly inline buttons",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "Read" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Got it: \"Read\".\n\nHow often? (Daily or Weekly)",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "📅 Daily", "callback_data": "freq:daily" },
+                    { "text": "📆 Weekly", "callback_data": "freq:weekly" }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T2: tapping 'Daily' edits the prompt to the times-per-day step and clears the keyboard",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "freq:daily", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Daily it is — \"Read\".\n\nHow many times per day? Send a number between 1 and 20, or /cancel.",
+              "reply_markup": { "inline_keyboard": [] }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T2: tapping 'Weekly' edits the prompt to the days-selection step and clears the keyboard",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "callback": "freq:weekly", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Weekly — \"Yoga\".\n\nWhich days? You'll pick the days next. /cancel to abort.",
+              "reply_markup": { "inline_keyboard": [] }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T2: typing 'daily' (text fallback) edits the same prompt to the times step",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "daily" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Daily it is — \"Read\".\n\nHow many times per day? Send a number between 1 and 20, or /cancel."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T2: typing 'WEEKLY' (case-insensitive) routes to the days step",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      {
+        "send": { "text": "WEEKLY" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Weekly — \"Yoga\".\n\nWhich days? You'll pick the days next. /cancel to abort."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
