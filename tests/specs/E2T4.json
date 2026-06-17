@@ -1,0 +1,137 @@
+[
+  {
+    "name": "E2T4: after picking Weekly, the first text input renders the days chooser (no days selected)",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:weekly", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "text": "mon,wed,fri" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Days for \"Yoga\": *Mon, Wed, Fri*\n\nTap a day to toggle it on/off. Tap ✅ Done when at least one day is selected.\n\nTip: you can also send a list like \"mon,wed,fri\".",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "✅ Mon", "callback_data": "days:toggle:1" },
+                    { "text": "Tue", "callback_data": "days:toggle:2" },
+                    { "text": "✅ Wed", "callback_data": "days:toggle:3" }
+                  ],
+                  [
+                    { "text": "Thu", "callback_data": "days:toggle:4" },
+                    { "text": "✅ Fri", "callback_data": "days:toggle:5" },
+                    { "text": "Sat", "callback_data": "days:toggle:6" }
+                  ],
+                  [{ "text": "Sun", "callback_data": "days:toggle:0" }],
+                  [{ "text": "✅ Done", "callback_data": "days:done" }]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T4: tapping a day toggles it (Mon off → Mon becomes plain)",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:weekly", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "mon,wed,fri" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "days:toggle:1", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Days for \"Yoga\": *Wed, Fri*\n\nTap a day to toggle it on/off. Tap ✅ Done when at least one day is selected.\n\nTip: you can also send a list like \"mon,wed,fri\".",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "Mon", "callback_data": "days:toggle:1" },
+                    { "text": "Tue", "callback_data": "days:toggle:2" },
+                    { "text": "✅ Wed", "callback_data": "days:toggle:3" }
+                  ],
+                  [
+                    { "text": "Thu", "callback_data": "days:toggle:4" },
+                    { "text": "✅ Fri", "callback_data": "days:toggle:5" },
+                    { "text": "Sat", "callback_data": "days:toggle:6" }
+                  ],
+                  [{ "text": "Sun", "callback_data": "days:toggle:0" }],
+                  [{ "text": "✅ Done", "callback_data": "days:done" }]
+                ]
+              }
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T4: text '1,3,5' (numbers) sets the same selection as 'mon,wed,fri'",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:weekly", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "text": "1,3,5" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Days for \"Yoga\": *Mon, Wed, Fri*\n\nTap a day to toggle it on/off. Tap ✅ Done when at least one day is selected.\n\nTip: you can also send a list like \"mon,wed,fri\"." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T4: 'Done' with zero days selected is rejected with an alert",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:weekly", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "text": "mon" },
+        "expect": [{ "method": "editMessageText" }]
+      },
+      {
+        "send": { "callback": "days:toggle:1", "messageId": 100 },
+        "expect": [{ "method": "editMessageText" }, { "method": "answerCallbackQuery" }]
+      },
+      {
+        "send": { "callback": "days:done", "messageId": 100 },
+        "expect": [
+          {
+            "method": "answerCallbackQuery",
+            "payload": { "text": "Pick at least one day.", "show_alert": true }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T4: 'Done' with a selection hands off to the confirmation step",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Yoga" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:weekly", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "tue,thu" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "days:done", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Summary so far for \"Yoga\":\n  • Frequency: weekly\n  • Days: Tue, Thu\n\nSaving... (E2T5 will add the confirm button.)"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  }
+]
