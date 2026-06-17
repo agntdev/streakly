@@ -137,6 +137,91 @@ async function renderTimesChooser(
   }
 }
 
+// --- E2T4: weekly-days chooser ---
+
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const DAY_LONG = [
+  "Sunday", "Monday", "Tuesday", "Wednesday",
+  "Thursday", "Friday", "Saturday",
+] as const;
+
+function parseDaysText(raw: string): number[] | null {
+  // Accept "mon,wed,fri", "Mon Wed Fri", "1,3,5", "0" (Sun=0). Returns sorted unique 0–6, or null on garbage.
+  const cleaned = raw.trim().toLowerCase();
+  if (!cleaned) return null;
+  const tokens = cleaned.split(/[\s,;]+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  const out = new Set<number>();
+  for (const t of tokens) {
+    const asNum = Number(t);
+    if (Number.isInteger(asNum) && asNum >= 0 && asNum <= 6) {
+      out.add(asNum);
+      continue;
+    }
+    const idx = DAY_LONG.findIndex((d) => d.toLowerCase().startsWith(t) || d.toLowerCase() === t);
+    if (idx >= 0) {
+      out.add(idx);
+      continue;
+    }
+    const shortIdx = DAY_SHORT.findIndex((d) => d.toLowerCase() === t);
+    if (shortIdx >= 0) {
+      out.add(shortIdx);
+      continue;
+    }
+    return null;
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+function daysChooserText(name: string, selected: number[]): string {
+  const list = selected.length === 0
+    ? "_none yet_"
+    : selected.map((d) => DAY_SHORT[d]).join(", ");
+  return (
+    `Days for "${name}": *${list}*\n\n` +
+    `Tap a day to toggle it on/off. Tap ✅ Done when at least one day is selected.\n\n` +
+    `Tip: you can also send a list like "mon,wed,fri".`
+  );
+}
+
+function daysChooserMarkup(selected: number[]) {
+  const sel = new Set(selected);
+  const label = (d: number) => (sel.has(d) ? `✅ ${DAY_SHORT[d]}` : DAY_SHORT[d]);
+  return {
+    inline_keyboard: [
+      [
+        inlineButton(label(1), "days:toggle:1"),
+        inlineButton(label(2), "days:toggle:2"),
+        inlineButton(label(3), "days:toggle:3"),
+      ],
+      [
+        inlineButton(label(4), "days:toggle:4"),
+        inlineButton(label(5), "days:toggle:5"),
+        inlineButton(label(6), "days:toggle:6"),
+      ],
+      [inlineButton(label(0), "days:toggle:0")],
+      [inlineButton("✅ Done", "days:done")],
+    ],
+  };
+}
+
+async function renderDaysChooser(
+  ctx: BotContext<Session>,
+  selected: number[],
+): Promise<void> {
+  const name = ctx.session.addHabit?.name ?? "";
+  const text = daysChooserText(name, selected);
+  const markup = daysChooserMarkup(selected);
+  if (ctx.session.wizardPromptId != null) {
+    await ctx.api.editMessageText(ctx.chat!.id, ctx.session.wizardPromptId, text, {
+      reply_markup: markup,
+    });
+  } else {
+    const s = await ctx.reply(text, { reply_markup: markup });
+    ctx.session.wizardPromptId = s.message_id;
+  }
+}
+
 /**
  * buildBot — assembles the bot and registers every handler, but does NOT start
  * it. Shared by the runtime entry (src/index.ts) and the Tests-gate harness
@@ -279,6 +364,21 @@ export function buildBot(token: string) {
       return;
     }
 
+    // --- 4. Wizard: awaiting weekly days (E2T4) ---
+    if (ctx.session.step === "awaiting_days") {
+      const parsed = parseDaysText(text);
+      if (parsed !== null) {
+        ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), weeklyDays: parsed };
+        await renderDaysChooser(ctx, parsed);
+        return;
+      }
+      // Invalid text: re-render the chooser with the current selection so the
+      // user sees the buttons and a fresh hint.
+      const current = ctx.session.addHabit?.weeklyDays ?? [];
+      await renderDaysChooser(ctx, current);
+      return;
+    }
+
     // --- 2. Future wizard steps (awaiting_times / days / confirmation) will
     //    be handled here by E2T3+. ---
 
@@ -369,6 +469,38 @@ export function buildBot(token: string) {
       }
       ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), timesPerDay: next };
       await renderTimesChooser(ctx, next);
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data.startsWith("days:")) {
+      const current = [...(ctx.session.addHabit?.weeklyDays ?? [])].sort((a, b) => a - b);
+      if (data === "days:done") {
+        if (current.length === 0) {
+          await ctx.answerCallbackQuery({ text: "Pick at least one day.", show_alert: true });
+          return;
+        }
+        ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), weeklyDays: current };
+        ctx.session.step = "awaiting_confirmation";
+        const name = ctx.session.addHabit?.name ?? "";
+        const list = current.map((d) => DAY_SHORT[d]).join(", ");
+        const text = `Summary so far for "${name}":\n  • Frequency: weekly\n  • Days: ${list}\n\nSaving... (E2T5 will add the confirm button.)`;
+        await ctx.editMessageText(text, { reply_markup: { inline_keyboard: [] } });
+        await ctx.answerCallbackQuery();
+        return;
+      }
+      const m = /^days:toggle:([0-6])$/.exec(data);
+      if (!m) {
+        await ctx.answerCallbackQuery();
+        return;
+      }
+      const day = Number(m[1]);
+      const set = new Set(current);
+      if (set.has(day)) set.delete(day);
+      else set.add(day);
+      const next = [...set].sort((a, b) => a - b);
+      ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), weeklyDays: next };
+      await renderDaysChooser(ctx, next);
       await ctx.answerCallbackQuery();
       return;
     }
