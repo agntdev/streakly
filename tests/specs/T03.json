@@ -1,0 +1,69 @@
+[
+  {
+    "name": "T03: /help lists every Streakly command",
+    "steps": [
+      {
+        "send": { "text": "/help" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "Streakly — habit streaks, made simple. 🎯\n\nCommands:\n/start — Welcome + main menu\n/help — This help message\n/add — Add a new habit\n/check — Log habits for today\n/stats — Your streak stats\n\nTip: send /start any time to bring back the menu."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T03: unknown /command gets a friendly fallback with the main menu",
+    "steps": [
+      {
+        "send": { "text": "/foobar" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "I don't recognize that command.\n\nSend /help to see what I can do, or tap a button below.",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "📝 Add Habit", "callback_data": "menu:add" },
+                    { "text": "✅ Check Today", "callback_data": "menu:check" }
+                  ],
+                  [
+                    { "text": "📊 Stats", "callback_data": "menu:stats" },
+                    { "text": "❓ Help", "callback_data": "menu:help" }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T03: a second unknown /command also gets the fallback",
+    "steps": [
+      {
+        "send": { "text": "/xyzzy" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "I don't recognize that command.\n\nSend /help to see what I can do, or tap a button below."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "T03: plain (non-command) text is left silent — user can use the menu or /help",
+    "strict": true,
+    "steps": [
+      { "send": { "text": "hello there" }, "expect": [] }
+    ]
+  }
+]
