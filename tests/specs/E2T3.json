@@ -1,0 +1,132 @@
+[
+  {
+    "name": "E2T3: typing a target number renders the chooser with that value",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "text": "3" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Times per day for \"Read\": *3*\n\nTap − / + to nudge (1–6), a preset (1 / 2 / 3), or send a number 1–20.\n\nTap ✅ Done to confirm.",
+              "reply_markup": {
+                "inline_keyboard": [
+                  [
+                    { "text": "−", "callback_data": "times:dec" },
+                    { "text": "3", "callback_data": "times:noop" },
+                    { "text": "+", "callback_data": "times:inc" }
+                  ],
+                  [
+                    { "text": "1", "callback_data": "times:set:1" },
+                    { "text": "2", "callback_data": "times:set:2" },
+                    { "text": "3", "callback_data": "times:set:3" }
+                  ],
+                  [{ "text": "✅ Done", "callback_data": "times:done" }]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T3: text '10' (above chooser max) is accepted and shown",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "text": "10" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Times per day for \"Read\": *10*\n\nTap − / + to nudge (1–6), a preset (1 / 2 / 3), or send a number 1–20.\n\nTap ✅ Done to confirm."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T3: invalid text keeps the current value and re-renders the chooser",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "3" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "text": "banana" },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Times per day for \"Read\": *3*\n\nTap − / + to nudge (1–6), a preset (1 / 2 / 3), or send a number 1–20.\n\nTap ✅ Done to confirm." }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T3: tapping '+' increments the value (capped at 6)",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "1" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "times:inc", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Times per day for \"Read\": *2*\n\nTap − / + to nudge (1–6), a preset (1 / 2 / 3), or send a number 1–20.\n\nTap ✅ Done to confirm." }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T3: preset '2' overrides the current value",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "5" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "times:set:2", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": { "text": "Times per day for \"Read\": *2*\n\nTap − / + to nudge (1–6), a preset (1 / 2 / 3), or send a number 1–20.\n\nTap ✅ Done to confirm." }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "E2T3: 'Done' stores the value and hands off to the confirmation step",
+    "steps": [
+      { "send": { "text": "/add" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Read" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "freq:daily", "messageId": 100 }, "expect": [{ "method": "editMessageText" }] },
+      { "send": { "text": "2" }, "expect": [{ "method": "editMessageText" }] },
+      {
+        "send": { "callback": "times:done", "messageId": 100 },
+        "expect": [
+          {
+            "method": "editMessageText",
+            "payload": {
+              "text": "Summary so far for \"Read\":\n  • Frequency: daily\n  • Target: 2×/day\n\nSaving... (E2T5 will add the confirm button.)"
+            }
+          },
+          { "method": "answerCallbackQuery" }
+        ]
+      }
+    ]
+  }
+]

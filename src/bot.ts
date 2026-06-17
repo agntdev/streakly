@@ -89,6 +89,54 @@ function isInWizard(step: Session["step"]): boolean {
   return step != null && step !== "idle";
 }
 
+// --- E2T3: times-per-day chooser ---
+
+const TIMES_MAX = 6; // +/- chooser caps at 6 per the spec; text accepts 1–20
+const TIMES_PRESETS = [1, 2, 3] as const;
+
+function timesChooserText(name: string, n: number): string {
+  return (
+    `Times per day for "${name}": *${n}*\n\n` +
+    `Tap − / + to nudge (1–${TIMES_MAX}), a preset (1 / 2 / 3), or send a number 1–20.\n\n` +
+    `Tap ✅ Done to confirm.`
+  );
+}
+
+function timesChooserMarkup(n: number) {
+  return {
+    inline_keyboard: [
+      [
+        inlineButton("−", "times:dec"),
+        inlineButton(String(n), "times:noop"),
+        inlineButton("+", "times:inc"),
+      ],
+      [
+        inlineButton("1", "times:set:1"),
+        inlineButton("2", "times:set:2"),
+        inlineButton("3", "times:set:3"),
+      ],
+      [inlineButton("✅ Done", "times:done")],
+    ],
+  };
+}
+
+async function renderTimesChooser(
+  ctx: BotContext<Session>,
+  n: number,
+): Promise<void> {
+  const name = ctx.session.addHabit?.name ?? "";
+  const text = timesChooserText(name, n);
+  const markup = timesChooserMarkup(n);
+  if (ctx.session.wizardPromptId != null) {
+    await ctx.api.editMessageText(ctx.chat!.id, ctx.session.wizardPromptId, text, {
+      reply_markup: markup,
+    });
+  } else {
+    const s = await ctx.reply(text, { reply_markup: markup });
+    ctx.session.wizardPromptId = s.message_id;
+  }
+}
+
 /**
  * buildBot — assembles the bot and registers every handler, but does NOT start
  * it. Shared by the runtime entry (src/index.ts) and the Tests-gate harness
@@ -221,6 +269,16 @@ export function buildBot(token: string) {
       // tap a button or type "daily"/"weekly".
     }
 
+    // --- 3. Wizard: awaiting times-per-day (E2T3) ---
+    if (ctx.session.step === "awaiting_times") {
+      const parsed = Number.parseInt(text.trim(), 10);
+      const current = ctx.session.addHabit?.timesPerDay ?? 1;
+      const next = Number.isFinite(parsed) && parsed >= 1 && parsed <= 20 ? parsed : current;
+      ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), timesPerDay: next };
+      await renderTimesChooser(ctx, next);
+      return;
+    }
+
     // --- 2. Future wizard steps (awaiting_times / days / confirmation) will
     //    be handled here by E2T3+. ---
 
@@ -282,6 +340,35 @@ export function buildBot(token: string) {
           { reply_markup: { inline_keyboard: [] } },
         );
       }
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    if (data.startsWith("times:")) {
+      const current = ctx.session.addHabit?.timesPerDay ?? 1;
+      let next = current;
+      if (data === "times:dec") next = Math.max(1, current - 1);
+      else if (data === "times:inc") next = Math.min(TIMES_MAX, current + 1);
+      else if (data === "times:set:1") next = 1;
+      else if (data === "times:set:2") next = 2;
+      else if (data === "times:set:3") next = 3;
+      else if (data === "times:noop") {
+        await ctx.answerCallbackQuery();
+        return;
+      } else if (data === "times:done") {
+        ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), timesPerDay: current };
+        ctx.session.step = "awaiting_confirmation";
+        const name = ctx.session.addHabit?.name ?? "";
+        const text = `Summary so far for "${name}":\n  • Frequency: daily\n  • Target: ${current}×/day\n\nSaving... (E2T5 will add the confirm button.)`;
+        await ctx.editMessageText(text, { reply_markup: { inline_keyboard: [] } });
+        await ctx.answerCallbackQuery();
+        return;
+      } else {
+        await ctx.answerCallbackQuery();
+        return;
+      }
+      ctx.session.addHabit = { ...(ctx.session.addHabit ?? {}), timesPerDay: next };
+      await renderTimesChooser(ctx, next);
       await ctx.answerCallbackQuery();
       return;
     }
