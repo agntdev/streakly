@@ -3,7 +3,7 @@ import {
   inlineButton,
   menuKeyboard,
   type BotContext,
-} from "@agntdev/bot-toolkit";
+} from "./toolkit/index.js";
 import type { BotError } from "grammy";
 import { createOrGetUser, createHabit } from "./db.js";
 
